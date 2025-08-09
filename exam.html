@@ -1,0 +1,92 @@
+<!doctype html><html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CBT — Exam</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head><body class="bg-gray-50 p-6">
+  <div class="max-w-3xl mx-auto">
+    <div class="flex justify-between items-center">
+      <h1 class="text-xl font-bold" id="examTitle">Ujian</h1>
+      <div><span id="timer" class="font-mono text-lg">--:--</span></div>
+    </div>
+    <div id="questionArea" class="mt-4"></div>
+    <div class="mt-4">
+      <button id="submitBtn" class="px-4 py-2 bg-blue-600 text-white rounded">Submit Jawaban</button>
+    </div>
+  </div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const examId = params.get('examId');
+const token = localStorage.getItem('cbt_token');
+
+if(!token){ alert('Silakan login dahulu'); location.href = '/'; }
+
+async function apiGet(u){ const r = await fetch(u, { headers: { Authorization: 'Bearer '+token } }); return r.json(); }
+async function apiPost(u, body){ const r = await fetch(u, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+token }, body: JSON.stringify(body) }); return r.json(); }
+
+let questions = [], attemptId = null, durationMinutes = 30;
+async function init(){
+  // start attempt
+  const start = await apiPost('/api/exams/'+examId+'/start', {});
+  attemptId = start.attemptId;
+  // get questions
+  const res = await apiGet('/api/exams/'+examId+'/questions');
+  questions = res.questions || [];
+  durationMinutes = (await (await apiGet('/api/exams')).exams.find(e=>e.id==examId).duration_minutes) || 30;
+  renderQuestions();
+  startTimer(durationMinutes*60);
+}
+
+function renderQuestions(){
+  const area = document.getElementById('questionArea');
+  area.innerHTML = '';
+  questions.forEach((q, idx) => {
+    const card = document.createElement('div'); card.className='surface p-3 mb-3';
+    let html = `<div class="font-semibold">Q${idx+1}. ${q.text}</div>`;
+    q.options.forEach((opt, i) => {
+      html += `<label class="block mt-2"><input type="radio" name="q${q.id}" value="${i}"/> ${opt}</label>`;
+    });
+    card.innerHTML = html;
+    area.appendChild(card);
+  });
+}
+
+function getAnswers(){
+  // return array of {questionId, answerIndex}
+  return questions.map(q => {
+    const checked = document.querySelector(`input[name="q${q.id}"]:checked`);
+    return { questionId: q.id, answerIndex: checked ? Number(checked.value) : null };
+  });
+}
+
+document.getElementById('submitBtn').addEventListener('click', submitAnswers);
+
+async function submitAnswers(){
+  const answers = getAnswers();
+  const res = await apiPost('/api/exams/'+examId+'/submit', { attemptId, answers });
+  alert('Selesai! Nilai: '+ (res.score||0) + '%');
+  location.href = '/';
+}
+
+// Timer
+let remainingSec = 0;
+function startTimer(seconds){
+  remainingSec = seconds;
+  updateTimerDisplay();
+  const t = setInterval(()=>{
+    remainingSec--;
+    if(remainingSec <= 0){
+      clearInterval(t);
+      alert('Waktu habis — jawaban akan dikirim otomatis.');
+      submitAnswers();
+    } else updateTimerDisplay();
+  }, 1000);
+}
+function updateTimerDisplay(){
+  const m = Math.floor(remainingSec/60), s = remainingSec%60;
+  document.getElementById('timer').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+init();
+</script>
+</body></html>

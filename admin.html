@@ -1,0 +1,75 @@
+<!doctype html><html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CBT — Admin</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head><body class="p-6 bg-gray-50">
+  <div class="max-w-3xl mx-auto">
+    <h1 class="text-2xl font-bold">Admin — Buat Ujian & Soal</h1>
+    <div class="mt-4 surface p-4">
+      <h2 class="font-semibold">Buat Ujian</h2>
+      <input id="examTitle" placeholder="Judul ujian" class="p-2 border rounded w-full mt-2"/>
+      <input id="examDuration" type="number" placeholder="Durasi (menit)" class="p-2 border rounded mt-2"/>
+      <button id="createExam" class="mt-2 px-3 py-2 bg-blue-600 text-white rounded">Buat Ujian</button>
+      <div id="examsList" class="mt-4"></div>
+    </div>
+    <div class="mt-4 surface p-4">
+      <h2 class="font-semibold">Tambah Soal ke Ujian</h2>
+      <select id="selExam" class="p-2 border rounded w-full mt-2"></select>
+      <textarea id="qText" placeholder="Teks soal" class="p-2 border rounded w-full mt-2"></textarea>
+      <input id="opt0" placeholder="Opsi 1" class="p-2 border rounded w-full mt-2"/>
+      <input id="opt1" placeholder="Opsi 2" class="p-2 border rounded w-full mt-2"/>
+      <input id="opt2" placeholder="Opsi 3" class="p-2 border rounded w-full mt-2"/>
+      <input id="opt3" placeholder="Opsi 4" class="p-2 border rounded w-full mt-2"/>
+      <select id="answerIdx" class="p-2 border rounded mt-2">
+        <option value="0">Opsi 1</option><option value="1">Opsi 2</option><option value="2">Opsi 3</option><option value="3">Opsi 4</option>
+      </select>
+      <button id="addQ" class="mt-2 px-3 py-2 bg-green-600 text-white rounded">Tambah Soal</button>
+    </div>
+  </div>
+
+<script>
+const token = localStorage.getItem('cbt_token');
+if(!token){ alert('Login sebagai admin terlebih dahulu'); location.href = '/'; }
+async function apiPost(url, body){
+  return fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+token }, body: JSON.stringify(body) }).then(r=>r.json());
+}
+async function apiGet(url){ return fetch(url, { headers:{ Authorization:'Bearer '+token } }).then(r=>r.json()); }
+
+async function loadExams(){
+  const data = await apiGet('/api/exams');
+  const sel = document.getElementById('selExam'); sel.innerHTML = '';
+  const list = document.getElementById('examsList'); list.innerHTML = '';
+  (data.exams||[]).forEach(e=>{
+    const opt = document.createElement('option'); opt.value = e.id; opt.textContent = e.title; sel.appendChild(opt);
+    const row = document.createElement('div'); row.className='p-2 border rounded mt-2 flex justify-between';
+    row.innerHTML = `<div><strong>${e.title}</strong><div class="text-sm muted">Durasi: ${e.duration_minutes} menit</div></div>
+    <div><button class="publishBtn px-2 py-1 bg-yellow-400 rounded" data-id="${e.id}">Publish</button></div>`;
+    list.appendChild(row);
+  });
+  document.querySelectorAll('.publishBtn').forEach(b=> b.addEventListener('click', async ev=>{
+    const id = ev.currentTarget.dataset.id;
+    await apiPost('/api/admin/exams/'+id+'/publish', {});
+    alert('Published');
+    loadExams();
+  }));
+}
+
+document.getElementById('createExam').addEventListener('click', async ()=>{
+  const title = document.getElementById('examTitle').value;
+  const dur = Number(document.getElementById('examDuration').value) || 30;
+  const res = await apiPost('/api/admin/exams', { title, duration_minutes: dur });
+  if(res.exam) { alert('Exam dibuat'); loadExams(); }
+});
+
+document.getElementById('addQ').addEventListener('click', async ()=>{
+  const examId = document.getElementById('selExam').value;
+  const text = document.getElementById('qText').value;
+  const options = [document.getElementById('opt0').value, document.getElementById('opt1').value, document.getElementById('opt2').value, document.getElementById('opt3').value];
+  const answer_index = Number(document.getElementById('answerIdx').value);
+  const res = await apiPost('/api/admin/exams/'+examId+'/questions', { text, options, answer_index });
+  if(res.question) { alert('Soal ditambah'); }
+});
+
+loadExams();
+</script>
+</body></html>

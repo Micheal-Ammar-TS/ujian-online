@@ -1,0 +1,97 @@
+<!-- public/index.html -->
+<!doctype html><html><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CBT — Masuk / Daftar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head><body class="bg-gray-50">
+  <div class="max-w-xl mx-auto p-6">
+    <h1 class="text-2xl font-bold mb-4">CBT — Masuk / Daftar</h1>
+
+    <div id="authBox" class="grid grid-cols-1 gap-3">
+      <input id="name" placeholder="Nama (untuk daftar)" class="p-2 border rounded" />
+      <input id="email" placeholder="Email" class="p-2 border rounded" />
+      <input id="password" type="password" placeholder="Password" class="p-2 border rounded" />
+      <div class="flex gap-2">
+        <button id="btnRegister" class="px-3 py-2 bg-blue-600 text-white rounded">Daftar</button>
+        <button id="btnLogin" class="px-3 py-2 bg-gray-200 rounded">Masuk</button>
+      </div>
+    </div>
+
+    <hr class="my-4"/>
+    <div id="app" style="display:none">
+      <div class="mb-3">
+        <strong>Halo, <span id="meName"></span></strong>
+        <button id="btnLogout" class="ml-3 text-sm text-red-600">Logout</button>
+      </div>
+      <h2 class="font-semibold">Ujian tersedia</h2>
+      <div id="examsList" class="mt-2 grid gap-3"></div>
+    </div>
+  </div>
+
+<script>
+const api = s => '/api' + s;
+let token = localStorage.getItem('cbt_token');
+function setToken(t, user){
+  token = t; if(t) localStorage.setItem('cbt_token', t); else localStorage.removeItem('cbt_token');
+  if(user){
+    document.getElementById('meName').textContent = user.name;
+    document.getElementById('authBox').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+  } else {
+    document.getElementById('authBox').style.display = 'block';
+    document.getElementById('app').style.display = 'none';
+  }
+}
+async function apiPost(url, body){
+  const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json', Authorization: token ? 'Bearer '+token : ''}, body: JSON.stringify(body) });
+  return res.json();
+}
+async function apiGet(url){
+  const res = await fetch(url, { headers: { Authorization: token ? 'Bearer '+token : '' }});
+  return res.json();
+}
+
+document.getElementById('btnRegister').addEventListener('click', async ()=>{
+  const name = document.getElementById('name').value;
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const res = await apiPost(api('/register'), { name, email, password });
+  if(res.token){ setToken(res.token, res.user); loadExams(); } else alert(res.error || 'Gagal daftar');
+});
+document.getElementById('btnLogin').addEventListener('click', async ()=>{
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const res = await apiPost(api('/login'), { email, password });
+  if(res.token){ setToken(res.token, res.user); loadExams(); } else alert(res.error || 'Gagal login');
+});
+document.getElementById('btnLogout').addEventListener('click', ()=> { setToken(null); location.reload(); });
+
+async function loadExams(){
+  const res = await apiGet(api('/exams'));
+  if(res.exams){
+    const container = document.getElementById('examsList'); container.innerHTML = '';
+    res.exams.forEach(e=> {
+      const div = document.createElement('div'); div.className='p-3 surface flex justify-between items-center';
+      div.innerHTML = `<div><div class="font-semibold">${e.title}</div><div class="text-sm muted">Durasi: ${e.duration_minutes} menit</div></div>
+      <div><button class="startBtn px-3 py-1 bg-green-600 text-white rounded" data-id="${e.id}" data-duration="${e.duration_minutes}">Mulai</button></div>`;
+      container.appendChild(div);
+    });
+    document.querySelectorAll('.startBtn').forEach(b=>{
+      b.addEventListener('click', (ev)=> {
+        const id = ev.currentTarget.dataset.id;
+        location.href = '/exam.html?examId='+id;
+      })
+    });
+  }
+}
+
+if(token){
+  // optionally decode token or call /me — here we call /exams to check validity
+  loadExams();
+  // show basic name if token contains it — decode not implemented; simplest: call /exams and show app
+  document.getElementById('authBox').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  // we could display user name by calling /profile endpoint -- omitted for brevity
+}
+</script>
+</body></html>
